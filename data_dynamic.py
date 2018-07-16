@@ -1,5 +1,6 @@
+#coding:utf-8
 import math
-import talib
+#import talib
 import pandas as pd
 import numpy as np
 import os
@@ -7,6 +8,8 @@ import pickle
 from datetime import datetime
 import random
 import time
+import talib
+import itertools
 
 count0 = 0
 count1 = 0
@@ -144,6 +147,9 @@ def buildDataForEachStock(filepath,count,count_,inputF,inputS):
         df_values = (df_values - df_values.min()) / (df_values.max() - df_values.min())
         #
         increase = df.loc[eachindex,'last_increase']
+        #
+        jiaochapoints=jiaocha(eachindex,df)
+        # if jiaochapoints.count(1)+jiaochapoints.count(2)>0:
         # 0-2,2-4,4-6,6-8,8-(下闭上开区间)
         # 采样,通过修改a>X中X的大小修改采样比重，X越大，采样越多，对采样的数据贴标签
         if increase > 0:
@@ -173,6 +179,7 @@ def buildDataForEachStock(filepath,count,count_,inputF,inputS):
                 # 统计数目
                 if len(df_values) != 0:
                     count[int(increase//2)] += 1
+
         else:   #小于等于0
             if increase <= -8:
                 trainingDataX.append(df_values.fillna(0).values)
@@ -202,7 +209,31 @@ def buildDataForEachStock(filepath,count,count_,inputF,inputS):
                     count_[int(abs(increase)//2)] += 1
 
     return trainingDataX, trainingDataY
-
+def jiaocha(t,df_valueslist):
+    # for t in range(1, len(df_valueslist['MACDhist_1'])):
+    cols=['MACDhist_','j_','cci_','BIAS_','CR_']
+    cross_points=[]
+    for col in cols:
+        colsnames=[]
+        for j in range(1,6):
+            colsnames.append(col+str(j))
+        for i in itertools.combinations(colsnames, 2):
+            # df.loc[eachindex, 'last_increase']
+            ema_close_short=df_valueslist[i[0]]
+            ema_close_long=df_valueslist[i[1]]
+            tindex = int(df_valueslist.loc[t, 'index'])
+            # df_values = df_valueslist.iloc[tindex-1 :tindex , :]
+            #金叉
+            if ema_close_short[t] > ema_close_short[tindex-1] and ema_close_short[t] > ema_close_long[t] \
+                            and ema_close_short[tindex-1] < ema_close_long[tindex-1]:
+                cross_points.append(1)
+            #死叉
+            elif ema_close_short[t] < ema_close_short[tindex-1] and ema_close_short[t] < ema_close_long[t] \
+                            and ema_close_short[tindex-1] > ema_close_long[tindex-1]:
+                cross_points.append(2)
+            else:
+                cross_points.append(0)
+    return cross_points
 def data_dynamic_do(inputF,inputS):
     inputsize = inputS
     start = time.clock()  #开始时间
@@ -227,7 +258,7 @@ def data_dynamic_do(inputF,inputS):
             os.remove(apath)
 
     # 读入新数据
-    for maindir, subdir, file_name_list in os.walk("../train"):  # TXTDAY=201501-201701
+    for maindir, subdir, file_name_list in os.walk("./train"):  # TXTDAY=201501-201701
         totalcount = 0
         totalfailcount = 0
         savecount = 0
@@ -268,31 +299,40 @@ def data_dynamic_do(inputF,inputS):
                 totalfailcount += 1
                 continue
 
-    # 将最后一批构建好的数据保存至本地文件中
-    version = datetime.now().strftime("%m-%d-%H-%M")
-    model_name = "trainingDataX_increase"
-    model_name1 = "trainingDataY_increase"
-    result_file = "increaseX/{}_{}_time{}.pkl"
-    result_file1 = "increaseY/{}_{}_time{}.pkl"
-    # 开始保存
-    with open(result_file.format(model_name, savecount, version), 'wb')  as f:
-        pickle.dump(all_X, f)
-    with open(result_file1.format(model_name1, savecount, version), 'wb')  as f:
-        pickle.dump(all_Y, f)
-    # 计算耗时
-    elapsed = (time.clock() - start)
-    print("耗时:", elapsed)
-    print("正10类数目为：\n", count)
-    print("负10类数目为：\n", count_)
-    print("读取成功的文件数", totalcount)
-    print("读取为空的文件数", totalfailcount)
-    print("finish")
-    # 统计数据处理结果
-    final_result = [count, count_, totalcount, totalfailcount]
-    info_result = ['正10类数目为', '负10类数目为',
-                   '读取成功的文件数', '读取为空的文件数']
-    df_result = pd.DataFrame({"info": info_result, "count": final_result})
-    info_file = "result/{}_time{}.csv"
-    info_name = "data_analyse_increase"
-    version = datetime.now().strftime("%m-%d-%H-%M")
-    df_result.to_csv(info_file.format(info_name, version))
+        # 将最后一批构建好的数据保存至本地文件中
+        version = datetime.now().strftime("%m-%d-%H-%M")
+        model_name = "trainingDataX_increase"
+        model_name1 = "trainingDataY_increase"
+        result_file = "increaseX/{}_{}_time{}.pkl"
+        result_file1 = "increaseY/{}_{}_time{}.pkl"
+        # 开始保存
+        with open(result_file.format(model_name, savecount, version), 'wb')  as f:
+            pickle.dump(all_X, f)
+        with open(result_file1.format(model_name1, savecount, version), 'wb')  as f:
+            pickle.dump(all_Y, f)
+        # 计算耗时
+        elapsed = (time.clock() - start)
+        print("耗时:", elapsed)
+        print("正10类数目为：\n", count)
+        print("负10类数目为：\n", count_)
+        print("读取成功的文件数", totalcount)
+        print("读取为空的文件数", totalfailcount)
+        print("finish")
+        # 统计数据处理结果
+        final_result = [count, count_, totalcount, totalfailcount]
+        info_result = ['正10类数目为', '负10类数目为',
+                       '读取成功的文件数', '读取为空的文件数']
+        df_result = pd.DataFrame({"info": info_result, "count": final_result})
+        info_file = "result/{}_time{}.csv"
+        info_name = "data_analyse_increase"
+        version = datetime.now().strftime("%m-%d-%H-%M")
+        df_result.to_csv(info_file.format(info_name, version))
+inputF=[ u'MACD', u'MACDsignal',
+       u'MACDhist_1', u'MACDhist_2', u'MACDhist_3', u'MACDhist_4',
+       u'MACDhist_5', u'k', u'd', u'j_1', u'j_2', u'j_3', u'j_4', u'j_5',
+       u'cci_1', u'cci_2', u'cci_3', u'cci_4', u'cci_5', u'BIAS_1', u'BIAS_2',
+       u'BIAS_3', u'BIAS_4', u'BIAS_5', u'MID', u'REF_MID_1', u'CR_UP',
+       u'CR_DOWN', u'CR_1', u'CR_2', u'CR_3', u'CR_4', u'CR_5', u'last_close',
+       u'last_increase']  #u'open', u'high', u'low', u'close', u'index',
+inputS=6
+data_dynamic_do(inputF,inputS)
